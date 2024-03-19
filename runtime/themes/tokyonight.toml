@@ -69,49 +69,30 @@ hint = { fg = "hint" }
 "ui.background" = { bg = "bg", fg = "fg" }
 "ui.cursor" = { modifiers = ["reversed"] }
 "ui.cursor.match" = { fg = "orange", modifiers = ["bold"] }
-"ui.cursor.primary" = { modifiers = ["reversed"] }
-"ui.cursorline.primary" = { bg = "background_menu" }
-"ui.help" = { fg = "foreground", bg = "background_menu" }
-"ui.linenr" = { fg = "foreground_gutter" }
-"ui.linenr.selected" = { fg = "foreground" }
-"ui.menu" = { fg = "foreground", bg = "background_menu" }
-"ui.menu.selected" = { bg = "background_highlight" }
-"ui.popup" = { fg = "foreground", bg = "background_menu" }
-"ui.selection" = { bg = "background_highlight" }
-"ui.selection.primary" = { bg = "background_highlight" }
-"ui.statusline" = { fg = "foreground", bg = "background_menu" }
-"ui.statusline.inactive" = { fg = "foreground_gutter", bg = "background_menu" }
-"ui.statusline.normal" = { fg = "black", bg = "blue" }
-"ui.statusline.insert" = { fg = "black", bg = "green" }
-"ui.statusline.select" = { fg = "black", bg = "magenta" }
-"ui.sticky.context" = { bg = "background_highlight" }
-"ui.sticky.indicator" = { fg = "comment", bg = "background_highlight" }
-"ui.text" = { fg = "foreground" }
-"ui.text.focus" = { fg = "cyan" }
-"ui.virtual.ruler" = { bg = "foreground_gutter" }
-"ui.virtual.whitespace" = { fg = "foreground_gutter" }
-"ui.virtual.inlay-hint" = { fg = "comment" }
-"ui.window" = { fg = "black" }
-
-"error" = { fg = "red" }
-"warning" = { fg = "yellow" }
-"info" = { fg = "blue" }
-"hint" = { fg = "teal" }
-"diagnostic.error" = { underline = { style = "curl", color = "red" } }
-"diagnostic.warning" = { underline = { style = "curl", color = "yellow" } }
-"diagnostic.info" = { underline = { style = "curl", color = "blue" } }
-"diagnostic.hint" = { underline = { style = "curl", color = "teal" } }
-"special" = { fg = "orange" }
-
-"markup.heading" = { fg = "cyan", modifiers = ["bold"] }
-"markup.list" = { fg = "cyan" }
-"markup.bold" = { fg = "orange", modifiers = ["bold"] }
-"markup.italic" = { fg = "yellow", modifiers = ["italic"] }
-"markup.strikethrough" = { modifiers = ["crossed_out"] }
-"markup.link.url" = { fg = "green" }
-"markup.link.text" = { fg = "light-gray" }
-"markup.quote" = { fg = "yellow", modifiers = ["italic"] }
-"markup.raw" = { fg = "cyan" }
+"ui.cursorline.primary" = { bg = "bg-menu" }
+"ui.help" = { bg = "bg-menu", fg = "fg" }
+"ui.linenr" = { fg = "fg-gutter" }
+"ui.linenr.selected" = { fg = "fg-linenr" }
+"ui.menu" = { bg = "bg-menu", fg = "fg" }
+"ui.menu.selected" = { bg = "fg-selected" }
+"ui.popup" = { bg = "bg-menu", fg = "border-highlight" }
+"ui.selection" = { bg = "bg-highlight" }
+"ui.selection.primary" = { bg = "bg-highlight" }
+"ui.statusline" = { bg = "bg-menu", fg = "fg-dark" }
+"ui.statusline.inactive" = { bg = "bg-menu", fg = "fg-gutter" }
+"ui.statusline.normal" = { bg = "blue", fg = "bg", modifiers = ["bold"] }
+"ui.statusline.insert" = { bg = "light-green", fg = "bg", modifiers = ["bold"] }
+"ui.statusline.select" = { bg = "magenta", fg = "bg", modifiers = ["bold"] }
+"ui.sticky.context" = { bg = "fg-gutter" }
+"ui.sticky.indicator" = { fg = "comment", bg = "fg-gutter" }
+"ui.text" = { fg = "fg" }
+"ui.text.focus" = { bg = "bg-visual" }
+"ui.text.inactive" = { fg = "comment", modifiers = ["italic"] }
+"ui.text.info" = { bg = "bg-menu", fg = "fg" }
+"ui.virtual.ruler" = { bg = "fg-gutter" }
+"ui.virtual.whitespace" = { fg = "fg-gutter" }
+"ui.virtual.inlay-hint" = {  bg = "bg-inlay", fg = "teal" }
+"ui.window" = { fg = "border", modifiers = ["bold"] }
 
 [palette]
 red = "#f7768e"
