@@ -618,6 +618,7 @@ fn move_impl(cx: &mut Context, move_fn: MoveFn, dir: Direction, behaviour: Movem
             &mut annotations,
         )
     });
+    drop(annotations);
     doc.set_selection(view.id, selection);
 }
 
@@ -1338,18 +1339,16 @@ fn find_char_line_ending(
                 let line = cursor_line + count - 1 + (on_edge as usize);
                 if line >= text.len_lines() - 1 {
                     return range;
-                } else {
-                    line
                 }
+                line
             }
             Direction::Backward => {
                 let on_edge = text.line_to_char(cursor_line) == cursor && !inclusive;
                 let line = cursor_line as isize - (count as isize - 1 + on_edge as isize);
                 if line <= 0 {
                     return range;
-                } else {
-                    line as usize
                 }
+                line as usize
             }
         };
 
@@ -1618,7 +1617,7 @@ fn switch_to_lowercase(cx: &mut Context) {
     });
 }
 
-pub fn scroll(cx: &mut Context, offset: usize, direction: Direction, sync_cursor: bool) {
+pub fn scroll(cx: &mut Context, offset: usize, direction: Direction) {
     use Direction::*;
     let config = cx.editor.config();
     let (view, doc) = current!(cx.editor);
@@ -1638,7 +1637,7 @@ pub fn scroll(cx: &mut Context, offset: usize, direction: Direction, sync_cursor
     let doc_text = doc.text().slice(..);
     let viewport = view.inner_area(doc);
     let text_fmt = doc.text_format(viewport.width, None);
-    let mut annotations = view.text_annotations(doc, None);
+    let annotations = view.text_annotations(&*doc, None);
     (view.offset.anchor, view.offset.vertical_offset) = char_idx_at_visual_offset(
         doc_text,
         view.offset.anchor,
@@ -1647,31 +1646,6 @@ pub fn scroll(cx: &mut Context, offset: usize, direction: Direction, sync_cursor
         &text_fmt,
         &annotations,
     );
-
-    if sync_cursor {
-        let movement = match cx.editor.mode {
-            Mode::Select => Movement::Extend,
-            _ => Movement::Move,
-        };
-        // TODO: When inline diagnostics gets merged- 1. move_vertically_visual removes
-        // line annotations/diagnostics so the cursor may jump further than the view.
-        // 2. If the cursor lands on a complete line of virtual text, the cursor will
-        // jump a different distance than the view.
-        let selection = doc.selection(view.id).clone().transform(|range| {
-            move_vertically_visual(
-                doc_text,
-                range,
-                direction,
-                offset.unsigned_abs(),
-                movement,
-                &text_fmt,
-                &mut annotations,
-            )
-        });
-        doc.set_selection(view.id, selection);
-        return;
-    }
-
     let mut head;
     match direction {
         Forward => {
@@ -1704,67 +1678,66 @@ pub fn scroll(cx: &mut Context, offset: usize, direction: Direction, sync_cursor
             }
         }
     }
-
     let anchor = if cx.editor.mode == Mode::Select {
         range.anchor
     } else {
         head
     };
-
     // replace primary selection with an empty selection at cursor pos
     let prim_sel = Range::new(anchor, head);
     let mut sel = doc.selection(view.id).clone();
     let idx = sel.primary_index();
     sel = sel.replace(idx, prim_sel);
+    drop(annotations);
     doc.set_selection(view.id, sel);
 }
 
 fn page_up(cx: &mut Context) {
     let view = view!(cx.editor);
     let offset = view.inner_height();
-    scroll(cx, offset, Direction::Backward, false);
+    scroll(cx, offset, Direction::Backward);
 }
 
 fn page_down(cx: &mut Context) {
     let view = view!(cx.editor);
     let offset = view.inner_height();
-    scroll(cx, offset, Direction::Forward, false);
+    scroll(cx, offset, Direction::Forward);
 }
 
 fn half_page_up(cx: &mut Context) {
     let view = view!(cx.editor);
     let offset = view.inner_height() / 2;
-    scroll(cx, offset, Direction::Backward, false);
+    scroll(cx, offset, Direction::Backward);
 }
 
 fn half_page_down(cx: &mut Context) {
     let view = view!(cx.editor);
     let offset = view.inner_height() / 2;
-    scroll(cx, offset, Direction::Forward, false);
+    scroll(cx, offset, Direction::Forward);
 }
 
 fn page_cursor_up(cx: &mut Context) {
     let view = view!(cx.editor);
     let offset = view.inner_height();
-    scroll(cx, offset, Direction::Backward, true);
+    scroll(cx, offset, Direction::Backward);
 }
 
 fn page_cursor_down(cx: &mut Context) {
     let view = view!(cx.editor);
     let offset = view.inner_height();
-    scroll(cx, offset, Direction::Forward, true);
+    scroll(cx, offset, Direction::Forward);
 }
 
 fn page_cursor_half_up(cx: &mut Context) {
     let view = view!(cx.editor);
     let offset = view.inner_height() / 2;
-    scroll(cx, offset, Direction::Backward, true);
+    scroll(cx, offset, Direction::Backward);
 }
 
 fn page_cursor_half_down(cx: &mut Context) {
     let view = view!(cx.editor);
     let offset = view.inner_height() / 2;
-    scroll(cx, offset, Direction::Forward, true);
+    scroll(cx, offset, Direction::Forward);
 }
 
 #[allow(deprecated)]
@@ -4753,10 +4726,9 @@ fn shrink_selection(cx: &mut Context) {
             if current_selection.contains(&prev_selection) {
                 doc.set_selection(view.id, prev_selection);
                 return;
-            } else {
-                // clear existing selection as they can't be shrunk to anyway
-                view.object_selections.clear();
             }
+
+            view.object_selections.clear();
         }
         // if not previous selection, shrink to first child
         if let Some(syntax) = doc.syntax() {
@@ -5068,11 +5040,11 @@ fn align_view_middle(cx: &mut Context) {
 }
 
 fn scroll_up(cx: &mut Context) {
-    scroll(cx, cx.count(), Direction::Backward, false);
+    scroll(cx, cx.count(), Direction::Backward);
 }
 
 fn scroll_down(cx: &mut Context) {
-    scroll(cx, cx.count(), Direction::Forward, false);
+    scroll(cx, cx.count(), Direction::Forward);
 }
 
 fn goto_ts_object_impl(cx: &mut Context, object: &'static str, direction: Direction) {

@@ -13,6 +13,7 @@ mod prompt;
 mod spinner;
 mod statusline;
 mod text;
+mod text_decorations;
 
 use crate::compositor::{Component, Compositor};
 use crate::filter_picker_entry;
