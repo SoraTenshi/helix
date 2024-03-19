@@ -315,6 +315,8 @@ pub struct Config {
     pub indent_heuristic: IndentationHeuristic,
     /// Whether to render rainbow highlights. Defaults to `false`.
     pub rainbow_brackets: bool,
+    /// How often a timeout pass has been reached until a new undo-checkpoint is made
+    pub timeout_passes: Option<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq, PartialOrd, Ord)]
@@ -934,6 +936,7 @@ impl Default for Config {
             popup_border: PopupBorderConfig::None,
             indent_heuristic: IndentationHeuristic::default(),
             rainbow_brackets: false,
+            timeout_passes: None,
         }
     }
 }
