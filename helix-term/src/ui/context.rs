@@ -287,7 +287,7 @@ fn build_cached_nodes(
         cached_nodes = cached_nodes
             .iter()
             .filter(|node| node.byte_range.start >= context.topmost_byte)
-            .map(|node| node.clone())
+            .cloned()
             .collect();
 
         return Some(cached_nodes);
