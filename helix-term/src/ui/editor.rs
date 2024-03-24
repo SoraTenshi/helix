@@ -706,7 +706,7 @@ impl EditorView {
         let active_buffertab_center =
             (active_buffertab.width as f64 / 2.).floor() as i32 + active_buffertab.x;
 
-        let right_of_center = active_buffertab_center as i32 - viewport_center as i32;
+        let right_of_center = active_buffertab_center - viewport_center;
 
         if right_of_center > 0 {
             let rightmost = buffertabs.last().unwrap();
@@ -730,7 +730,6 @@ impl EditorView {
                     tab.text = tab
                         .text
                         .graphemes(true)
-                        .into_iter()
                         .skip((tab.width as i32 - new_width) as usize)
                         .collect();
 

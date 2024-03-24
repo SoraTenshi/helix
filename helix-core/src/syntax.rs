@@ -2059,7 +2059,7 @@ impl HighlightConfiguration {
                 highlights_pattern_index += 1;
             }
         }
-        let rainbow_query = Query::new(&language, &rainbow_query)?;
+        let rainbow_query = Query::new(&language, rainbow_query)?;
 
         let injections_query = Query::new(&language, injection_query)?;
         let combined_injections_patterns = (0..injections_query.pattern_count())
