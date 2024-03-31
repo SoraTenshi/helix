@@ -411,6 +411,23 @@ impl View {
     ) -> TextAnnotations<'a> {
         let mut text_annotations = TextAnnotations::default();
 
+        if let Some(labels) = doc.jump_labels.get(&self.id) {
+            let style = theme
+                .and_then(|t| t.find_scope_index("ui.virtual.jump-label"))
+                .map(Highlight);
+            text_annotations.add_overlay(labels, style);
+        }
+
+        let type_style = theme
+            .and_then(|t| t.find_scope_index("ui.virtual.inlay-hint.type"))
+            .map(Highlight);
+        let parameter_style = theme
+            .and_then(|t| t.find_scope_index("ui.virtual.inlay-hint.parameter"))
+            .map(Highlight);
+        let other_style = theme
+            .and_then(|t| t.find_scope_index("ui.virtual.inlay-hint"))
+            .map(Highlight);
+
         if let Some(DocumentInlayHints {
             id: _,
             type_inlay_hints,
@@ -420,16 +437,6 @@ impl View {
             padding_after_inlay_hints,
         }) = doc.inlay_hints.get(&self.id)
         {
-            let type_style = theme
-                .and_then(|t| t.find_scope_index("ui.virtual.inlay-hint.type"))
-                .map(Highlight);
-            let parameter_style = theme
-                .and_then(|t| t.find_scope_index("ui.virtual.inlay-hint.parameter"))
-                .map(Highlight);
-            let other_style = theme
-                .and_then(|t| t.find_scope_index("ui.virtual.inlay-hint"))
-                .map(Highlight);
-
             // Overlapping annotations are ignored apart from the first so the order here is not random:
             // types -> parameters -> others should hopefully be the "correct" order for most use cases,
             // with the padding coming before and after as expected.
@@ -440,6 +447,7 @@ impl View {
                 .add_inline_annotations(other_inlay_hints, other_style)
                 .add_inline_annotations(padding_after_inlay_hints, None);
         };
+
         let width = self.inner_width(doc);
         let config = doc.config.load();
         if config.lsp.inline_diagnostics.enable(width) {

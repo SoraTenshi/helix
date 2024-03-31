@@ -23,7 +23,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use std::{
     borrow::Cow,
     cell::Cell,
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     fs,
     io::{self, stdin},
     num::NonZeroUsize,
@@ -213,6 +213,23 @@ impl Default for FilePickerConfig {
     }
 }
 
+fn deserialize_alphabet<'de, D>(deserializer: D) -> Result<Vec<char>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::de::Error;
+
+    let str = String::deserialize(deserializer)?;
+    let chars: Vec<_> = str.chars().collect();
+    let unique_chars: HashSet<_> = chars.iter().copied().collect();
+    if unique_chars.len() != chars.len() {
+        return Err(<D::Error as Error>::custom(
+            "jump-label-alphabet must contain unique characters",
+        ));
+    }
+    Ok(chars)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case", default, deny_unknown_fields)]
 pub struct Config {
@@ -317,6 +334,9 @@ pub struct Config {
     pub rainbow_brackets: bool,
     /// How often a timeout pass has been reached until a new undo-checkpoint is made
     pub timeout_passes: Option<u8>,
+    /// labels characters used in jumpmode
+    #[serde(skip_serializing, deserialize_with = "deserialize_alphabet")]
+    pub jump_label_alphabet: Vec<char>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq, PartialOrd, Ord)]
@@ -735,6 +755,7 @@ pub enum WhitespaceRender {
         default: Option<WhitespaceRenderValue>,
         space: Option<WhitespaceRenderValue>,
         nbsp: Option<WhitespaceRenderValue>,
+        nnbsp: Option<WhitespaceRenderValue>,
         tab: Option<WhitespaceRenderValue>,
         newline: Option<WhitespaceRenderValue>,
     },
@@ -766,6 +787,14 @@ impl WhitespaceRender {
             }
         }
     }
+    pub fn nnbsp(&self) -> WhitespaceRenderValue {
+        match *self {
+            Self::Basic(val) => val,
+            Self::Specific { default, nnbsp, .. } => {
+                nnbsp.or(default).unwrap_or(WhitespaceRenderValue::None)
+            }
+        }
+    }
     pub fn tab(&self) -> WhitespaceRenderValue {
         match *self {
             Self::Basic(val) => val,
@@ -789,6 +818,7 @@ impl WhitespaceRender {
 pub struct WhitespaceCharacters {
     pub space: char,
     pub nbsp: char,
+    pub nnbsp: char,
     pub tab: char,
     pub tabpad: char,
     pub newline: char,
@@ -799,6 +829,7 @@ impl Default for WhitespaceCharacters {
         Self {
             space: '·',   // U+00B7
             nbsp: '⍽',    // U+237D
+            nnbsp: '␣',   // U+2423
             tab: '→',     // U+2192
             newline: '⏎', // U+23CE
             tabpad: ' ',
@@ -937,6 +968,7 @@ impl Default for Config {
             indent_heuristic: IndentationHeuristic::default(),
             rainbow_brackets: false,
             timeout_passes: None,
+            jump_label_alphabet: ('a'..='z').collect(),
         }
     }
 }

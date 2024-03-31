@@ -237,6 +237,7 @@ pub struct TextRenderer<'a> {
     pub theme: &'a Theme,
     pub newline: String,
     pub nbsp: String,
+    pub nnbsp: String,
     pub space: String,
     pub tab: String,
     pub virtual_tab: String,
@@ -291,6 +292,11 @@ impl<'a> TextRenderer<'a> {
         } else {
             " ".to_owned()
         };
+        let nnbsp = if ws_render.nnbsp() == WhitespaceRenderValue::All {
+            ws_chars.nnbsp.into()
+        } else {
+            " ".to_owned()
+        };
 
         let text_style = theme.get("ui.text");
         let basic_style = text_style.patch(
@@ -308,6 +314,7 @@ impl<'a> TextRenderer<'a> {
             theme,
             newline,
             nbsp,
+            nnbsp,
             space,
             tab,
             virtual_tab,
@@ -391,6 +398,7 @@ impl<'a> TextRenderer<'a> {
         let width = grapheme.width();
         let space = if is_virtual { " " } else { &self.space };
         let nbsp = if is_virtual { " " } else { &self.nbsp };
+        let nnbsp = if is_virtual { " " } else { &self.nnbsp };
         let tab = if is_virtual {
             &self.virtual_tab
         } else {
@@ -404,6 +412,7 @@ impl<'a> TextRenderer<'a> {
             // TODO special rendering for other whitespaces?
             Grapheme::Other { ref g } if g == " " => space,
             Grapheme::Other { ref g } if g == "\u{00A0}" => nbsp,
+            Grapheme::Other { ref g } if g == "\u{202F}" => nnbsp,
             Grapheme::Other { ref g } => g,
             Grapheme::Newline => &self.newline,
         };
