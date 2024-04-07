@@ -3,10 +3,17 @@ pub(crate) mod lsp;
 pub(crate) mod typed;
 
 pub use dap::*;
-use helix_stdx::rope::{self, RopeSliceExt};
-use helix_vcs::Hunk;
+use helix_event::status;
+use helix_stdx::{
+    path::expand_tilde,
+    rope::{self, RopeSliceExt},
+};
+use helix_vcs::{FileChange, Hunk};
 pub use lsp::*;
-use tui::widgets::Row;
+use tui::{
+    text::Span,
+    widgets::{Cell, Row},
+};
 pub use typed::*;
 
 use helix_core::{
@@ -39,6 +46,7 @@ use helix_view::{
     info::Info,
     input::KeyEvent,
     keyboard::KeyCode,
+    theme::Style,
     tree,
     view::View,
     Document, DocumentId, Editor, ViewId,
@@ -54,7 +62,7 @@ use crate::{
     filter_picker_entry,
     job::Callback,
     keymap::ReverseKeymap,
-    ui::{self, overlay::overlaid, Picker, Popup, Prompt, PromptEvent},
+    ui::{self, menu::Item, overlay::overlaid, Picker, Popup, Prompt, PromptEvent},
 };
 
 use crate::job::{self, Jobs};
@@ -324,6 +332,7 @@ impl MappableCommand {
         buffer_picker, "Open buffer picker",
         jumplist_picker, "Open jumplist picker",
         symbol_picker, "Open symbol picker",
+        changed_file_picker, "Open changed file picker",
         select_references_to_symbol_under_cursor, "Select symbol references",
         workspace_symbol_picker, "Open workspace symbol picker",
         diagnostics_picker, "Open diagnostic picker",
@@ -475,6 +484,8 @@ impl MappableCommand {
         goto_prev_comment, "Goto previous comment",
         goto_next_test, "Goto next test",
         goto_prev_test, "Goto previous test",
+        goto_next_entry, "Goto next pairing",
+        goto_prev_entry, "Goto previous pairing",
         goto_next_paragraph, "Goto next paragraph",
         goto_prev_paragraph, "Goto previous paragraph",
         dap_launch, "Launch debug target",
@@ -1188,25 +1199,51 @@ fn goto_file_impl(cx: &mut Context, action: Action) {
     let primary = selections.primary();
     // Checks whether there is only one selection with a width of 1
     if selections.len() == 1 && primary.len() == 1 {
-        let count = cx.count();
-        let text_slice = text.slice(..);
-        // In this case it selects the WORD under the cursor
-        let current_word = textobject::textobject_word(
-            text_slice,
-            primary,
-            textobject::TextObject::Inside,
-            count,
-            true,
-        );
-        // Trims some surrounding chars so that the actual file is opened.
-        let surrounding_chars: &[_] = &['\'', '"', '(', ')'];
         paths.clear();
-        paths.push(
-            current_word
-                .fragment(text_slice)
-                .trim_matches(surrounding_chars)
-                .to_string(),
-        );
+
+        let is_valid_path_char = |c: &char| {
+            #[cfg(target_os = "windows")]
+            let valid_chars = &[
+                '@', '/', '\\', '.', '-', '_', '+', '#', '$', '%', '{', '}', '[', ']', ':', '!',
+                '~', '=',
+            ];
+            #[cfg(not(target_os = "windows"))]
+            let valid_chars = &['@', '/', '.', '-', '_', '+', '#', '$', '%', '~', '=', ':'];
+
+            valid_chars.contains(c) || c.is_alphabetic() || c.is_numeric()
+        };
+
+        let cursor_pos = primary.cursor(text.slice(..));
+        let pre_cursor_pos = cursor_pos.saturating_sub(1);
+        let post_cursor_pos = cursor_pos + 1;
+        let start_pos = if is_valid_path_char(&text.char(cursor_pos)) {
+            cursor_pos
+        } else if is_valid_path_char(&text.char(pre_cursor_pos)) {
+            pre_cursor_pos
+        } else {
+            post_cursor_pos
+        };
+
+        let prefix_len = text
+            .chars_at(start_pos)
+            .reversed()
+            .take_while(is_valid_path_char)
+            .count();
+
+        let postfix_len = text
+            .chars_at(start_pos)
+            .take_while(is_valid_path_char)
+            .count();
+
+        let path: Cow<str> = text
+            .slice((start_pos - prefix_len)..(start_pos + postfix_len))
+            .into();
+        log::debug!("Goto file path: {}", path);
+
+        match expand_tilde(PathBuf::from(path.as_ref())).to_str() {
+            Some(path) => paths.push(path.to_string()),
+            None => cx.editor.set_error("Couldn't get string out of path."),
+        };
     }
 
     for sel in paths {
@@ -2580,14 +2617,19 @@ fn selection_is_linewise(selection: &Selection, text: &Rope) -> bool {
     })
 }
 
-fn delete_selection_impl(cx: &mut Context, op: Operation) {
+enum YankAction {
+    Yank,
+    NoYank,
+}
+
+fn delete_selection_impl(cx: &mut Context, op: Operation, yank: YankAction) {
     let (view, doc) = current!(cx.editor);
 
     let selection = doc.selection(view.id);
     let only_whole_lines = selection_is_linewise(selection, doc.text());
 
-    if cx.register != Some('_') {
-        // first yank the selection
+    if cx.register != Some('_') && matches!(yank, YankAction::Yank) {
+        // yank the selection
         let text = doc.text().slice(..);
         let values: Vec<String> = selection.fragments(text).map(Cow::into_owned).collect();
         let reg_name = cx.register.unwrap_or('"');
@@ -2595,9 +2637,9 @@ fn delete_selection_impl(cx: &mut Context, op: Operation) {
             cx.editor.set_error(err.to_string());
             return;
         }
-    };
+    }
 
-    // then delete
+    // delete the selection
     let transaction =
         Transaction::delete_by_selection(doc.text(), selection, |range| (range.from(), range.to()));
     doc.apply(&transaction, view.id);
@@ -2663,21 +2705,19 @@ fn delete_by_selection_insert_mode(
 }
 
 fn delete_selection(cx: &mut Context) {
-    delete_selection_impl(cx, Operation::Delete);
+    delete_selection_impl(cx, Operation::Delete, YankAction::Yank);
 }
 
 fn delete_selection_noyank(cx: &mut Context) {
-    cx.register = Some('_');
-    delete_selection_impl(cx, Operation::Delete);
+    delete_selection_impl(cx, Operation::Delete, YankAction::NoYank);
 }
 
 fn change_selection(cx: &mut Context) {
-    delete_selection_impl(cx, Operation::Change);
+    delete_selection_impl(cx, Operation::Change, YankAction::Yank);
 }
 
 fn change_selection_noyank(cx: &mut Context) {
-    cx.register = Some('_');
-    delete_selection_impl(cx, Operation::Change);
+    delete_selection_impl(cx, Operation::Change, YankAction::NoYank);
 }
 
 fn collapse_selection(cx: &mut Context) {
@@ -2943,6 +2983,7 @@ fn jumplist_picker(cx: &mut Context) {
             .flat_map(|(view, _)| {
                 view.jumps
                     .iter()
+                    .rev()
                     .map(|(doc_id, selection)| new_meta(view, *doc_id, selection.clone()))
             })
             .collect(),
@@ -2962,6 +3003,94 @@ fn jumplist_picker(cx: &mut Context) {
         let line = meta.selection.primary().cursor_line(doc.text().slice(..));
         Some((meta.id.into(), Some((line, line))))
     });
+    cx.push_layer(Box::new(overlaid(picker)));
+}
+
+fn changed_file_picker(cx: &mut Context) {
+    pub struct FileChangeData {
+        cwd: PathBuf,
+        style_untracked: Style,
+        style_modified: Style,
+        style_conflict: Style,
+        style_deleted: Style,
+        style_renamed: Style,
+    }
+
+    impl Item for FileChange {
+        type Data = FileChangeData;
+
+        fn format(&self, data: &Self::Data) -> Row {
+            let process_path = |path: &PathBuf| {
+                path.strip_prefix(&data.cwd)
+                    .unwrap_or(path)
+                    .display()
+                    .to_string()
+            };
+
+            let (sign, style, content) = match self {
+                Self::Untracked { path } => ("[+]", data.style_untracked, process_path(path)),
+                Self::Modified { path } => ("[~]", data.style_modified, process_path(path)),
+                Self::Conflict { path } => ("[x]", data.style_conflict, process_path(path)),
+                Self::Deleted { path } => ("[-]", data.style_deleted, process_path(path)),
+                Self::Renamed { from_path, to_path } => (
+                    "[>]",
+                    data.style_renamed,
+                    format!("{} -> {}", process_path(from_path), process_path(to_path)),
+                ),
+            };
+
+            Row::new([Cell::from(Span::styled(sign, style)), Cell::from(content)])
+        }
+    }
+
+    let cwd = helix_stdx::env::current_working_dir();
+    if !cwd.exists() {
+        cx.editor
+            .set_error("Current working directory does not exist");
+        return;
+    }
+
+    let added = cx.editor.theme.get("diff.plus");
+    let modified = cx.editor.theme.get("diff.delta");
+    let conflict = cx.editor.theme.get("diff.delta.conflict");
+    let deleted = cx.editor.theme.get("diff.minus");
+    let renamed = cx.editor.theme.get("diff.delta.moved");
+
+    let picker = Picker::new(
+        Vec::new(),
+        FileChangeData {
+            cwd: cwd.clone(),
+            style_untracked: added,
+            style_modified: modified,
+            style_conflict: conflict,
+            style_deleted: deleted,
+            style_renamed: renamed,
+        },
+        |cx, meta: &FileChange, action| {
+            let path_to_open = meta.path();
+            if let Err(e) = cx.editor.open(path_to_open, action) {
+                let err = if let Some(err) = e.source() {
+                    format!("{}", err)
+                } else {
+                    format!("unable to open \"{}\"", path_to_open.display())
+                };
+                cx.editor.set_error(err);
+            }
+        },
+    )
+    .with_preview(|_editor, meta| Some((meta.path().to_path_buf().into(), None)));
+    let injector = picker.injector();
+
+    cx.editor
+        .diff_providers
+        .clone()
+        .for_each_changed_file(cwd, move |change| match change {
+            Ok(change) => injector.push(change).is_ok(),
+            Err(err) => {
+                status::report_blocking(err);
+                true
+            }
+        });
     cx.push_layer(Box::new(overlaid(picker)));
 }
 
@@ -5137,6 +5266,14 @@ fn goto_prev_test(cx: &mut Context) {
     goto_ts_object_impl(cx, "test", Direction::Backward)
 }
 
+fn goto_next_entry(cx: &mut Context) {
+    goto_ts_object_impl(cx, "entry", Direction::Forward)
+}
+
+fn goto_prev_entry(cx: &mut Context) {
+    goto_ts_object_impl(cx, "entry", Direction::Backward)
+}
+
 fn select_textobject_around(cx: &mut Context) {
     select_textobject(cx, textobject::TextObject::Around);
 }
@@ -5201,6 +5338,7 @@ fn select_textobject(cx: &mut Context, objtype: textobject::TextObject) {
                         'a' => textobject_treesitter("parameter", range),
                         'c' => textobject_treesitter("comment", range),
                         'T' => textobject_treesitter("test", range),
+                        'e' => textobject_treesitter("entry", range),
                         'p' => textobject::textobject_paragraph(text, range, objtype, count),
                         'm' => textobject::textobject_pair_surround_closest(
                             text, range, objtype, count,
@@ -5233,6 +5371,7 @@ fn select_textobject(cx: &mut Context, objtype: textobject::TextObject) {
         ("a", "Argument/parameter (tree-sitter)"),
         ("c", "Comment (tree-sitter)"),
         ("T", "Test (tree-sitter)"),
+        ("e", "Data structure entry (tree-sitter)"),
         ("m", "Closest surrounding pair"),
         (" ", "... or any character acting as a pair"),
     ];

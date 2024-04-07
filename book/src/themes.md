@@ -262,6 +262,7 @@ We use a similar set of scopes as
     - `gutter` - gutter indicator
   - `delta` - modifications
     - `moved` - renamed or moved files/changes
+    - `conflict` - merge conflicts
     - `gutter` - gutter indicator
 
 #### Interface
